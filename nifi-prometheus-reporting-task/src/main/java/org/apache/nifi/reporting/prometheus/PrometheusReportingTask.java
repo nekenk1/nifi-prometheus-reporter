@@ -84,7 +84,7 @@ public class PrometheusReportingTask extends AbstractReportingTask {
             .expressionLanguageSupported(ExpressionLanguageScope.VARIABLE_REGISTRY)
             .addValidator(StandardValidators
                     .createListValidator(true, true
-                            , StandardValidators.createRegexMatchingValidator(Pattern.compile("[0-9a-z-]+"))))
+                            , StandardValidators.createRegexMatchingValidator(Pattern.compile("[0-9a-zA-Z-_]+"))))
             .build();
     static final PropertyDescriptor JOB_NAME = new PropertyDescriptor.Builder()
             .name("The job name")
