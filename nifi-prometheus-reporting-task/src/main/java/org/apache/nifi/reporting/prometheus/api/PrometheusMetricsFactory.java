@@ -5,7 +5,9 @@ import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Gauge;
 import org.apache.nifi.controller.status.ProcessGroupStatus;
 import org.apache.nifi.controller.status.ProcessorStatus;
+import org.apache.nifi.reporting.Bulletin;
 
+import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -16,6 +18,7 @@ public class PrometheusMetricsFactory {
 
     private static final CollectorRegistry NIFI_METRICS_REGISTRY = new CollectorRegistry();
     private static final CollectorRegistry JVM_REGISTRY = new CollectorRegistry();
+    private static final CollectorRegistry BULLETINS_REGISTRY = new CollectorRegistry();
 
 
     private static final Gauge AMOUNT_FLOWFILES_TOTAL = Gauge.build()
@@ -53,6 +56,12 @@ public class PrometheusMetricsFactory {
             .help("Total amount of processors in ProcessGroup")
             .labelNames("status", "application", "process_group")
             .register(NIFI_METRICS_REGISTRY);
+
+    private static final Gauge AMOUNT_BULLETINS = Gauge.build()
+            .name("process_group_amount_bulletins")
+            .help("Total amount of bulletins in General (Warnings and Errors Only)")
+            .labelNames("status", "application", "source_id", "source_type", "process_group")
+            .register(BULLETINS_REGISTRY); 
 
     private static final Gauge JVM_HEAP = Gauge.build()
             .name("jvm_heap_stats")
@@ -175,5 +184,27 @@ public class PrometheusMetricsFactory {
                 });
 
         return JVM_REGISTRY;
+    }
+
+    public static CollectorRegistry createBulletinMetrics(String applicationId, ArrayList<Bulletin> bulletins) {
+        // int warning=0; int error=0; int info=0; int debug=0; int none=0;
+        for (Bulletin bull : bulletins) {
+                // switch (bull.getLevel()) {
+                //         case "WARN": warning++; break;
+                //         case "DEBUG": debug++; break;
+                //         case "INFO": info++; break;
+                //         case "ERROR": error++; break;
+                //         case "NONE": none++; break;
+                //         default: break;
+                // }
+                AMOUNT_BULLETINS.labels(
+                        bull.getLevel(), 
+                        applicationId,
+                        bull.getSourceId(),
+                        bull.getSourceType().name(),
+                        bull.getGroupName()).set(1);
+        }
+
+        return BULLETINS_REGISTRY;
     }
 }

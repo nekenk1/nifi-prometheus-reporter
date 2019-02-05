@@ -37,6 +37,8 @@ import org.apache.nifi.controller.status.ProcessGroupStatus;
 import org.apache.nifi.expression.ExpressionLanguageScope;
 import org.apache.nifi.processor.util.StandardValidators;
 import org.apache.nifi.reporting.AbstractReportingTask;
+import org.apache.nifi.reporting.BulletinQuery;
+import org.apache.nifi.reporting.BulletinRepository;
 import org.apache.nifi.reporting.ReportingContext;
 import org.apache.nifi.reporting.prometheus.api.PrometheusMetricsFactory;
 import org.apache.nifi.scheduling.SchedulingStrategy;
@@ -171,6 +173,17 @@ public class PrometheusReportingTask extends AbstractReportingTask {
             } catch (IOException e) {
                 getLogger().error("Failed pushing Nifi-metrics to Prometheus PushGateway due to {}; routing to failure", e);
             }
+        }
+
+        try {
+                BulletinRepository repository = context.getBulletinRepository();
+                final BulletinQuery queryProcessor = new BulletinQuery.Builder()
+                        .limit(500)
+                        .build();
+                ArrayList bulletins = (ArrayList) repository.findBulletins(queryProcessor);
+                pushGateway.pushAdd(PrometheusMetricsFactory.createBulletinMetrics(applicationId, bulletins), jobName, groupingKey);
+        } catch (IOException e) {
+                getLogger().error("Failed pushing Nifi-Bulletin to Prometheus PushGateway due to {}; routing to failure", e);
         }
     }
 
