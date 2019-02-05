@@ -4,6 +4,7 @@ import com.yammer.metrics.core.VirtualMachineMetrics;
 import io.prometheus.client.CollectorRegistry;
 import io.prometheus.client.Gauge;
 import org.apache.nifi.controller.status.ProcessGroupStatus;
+import org.apache.nifi.controller.status.ProcessorStatus;
 
 import java.util.concurrent.TimeUnit;
 
@@ -44,6 +45,12 @@ public class PrometheusMetricsFactory {
     private static final Gauge AMOUNT_ITEMS = Gauge.build()
             .name("process_group_amount_items")
             .help("Total amount of items in ProcessGroup")
+            .labelNames("status", "application", "process_group")
+            .register(NIFI_METRICS_REGISTRY);
+
+    private static final Gauge AMOUNT_PROCESSORS = Gauge.build()
+            .name("process_group_amount_processors")
+            .help("Total amount of processors in ProcessGroup")
             .labelNames("status", "application", "process_group")
             .register(NIFI_METRICS_REGISTRY);
 
@@ -99,7 +106,28 @@ public class PrometheusMetricsFactory {
 
         AMOUNT_THREADS_TOTAL.labels("nano", applicationId, processGroupName).set(status.getActiveThreadCount());
 
+        get_status_of_processors(applicationId, processGroupName, status);
+
         return NIFI_METRICS_REGISTRY;
+    }
+
+    public static void get_status_of_processors(String applicationId, String processGroupName, ProcessGroupStatus status) {
+        int disabled=0; int invalid=0; int running=0; int stopped=0; int validating=0;
+        for (ProcessorStatus proc : status.getProcessorStatus()) {
+                switch (proc.getRunStatus()) {
+                        case Disabled: disabled++; break;
+                        case Invalid: invalid++; break;
+                        case Running: running++; break;
+                        case Stopped: stopped++; break;
+                        case Validating: validating++; break;
+                        default: break;
+                }
+        }
+        AMOUNT_PROCESSORS.labels("disabled", applicationId, processGroupName).set(disabled);
+        AMOUNT_PROCESSORS.labels("invalid", applicationId, processGroupName).set(invalid);
+        AMOUNT_PROCESSORS.labels("running", applicationId, processGroupName).set(running);
+        AMOUNT_PROCESSORS.labels("stopped", applicationId, processGroupName).set(stopped);
+        AMOUNT_PROCESSORS.labels("validating", applicationId, processGroupName).set(validating);
     }
 
     public static CollectorRegistry createJvmMetrics(VirtualMachineMetrics jvmMetrics) {

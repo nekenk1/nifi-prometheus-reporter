@@ -65,6 +65,8 @@ public class TestPrometheusReportingTask {
         status.setInputContentSize(Integer.toUnsignedLong(0));
         status.setOutputContentSize(Integer.toUnsignedLong(0));
         status.setOutputContentSize(Integer.toUnsignedLong(0));
+        ArrayList<ProcessorStatus> list = new ArrayList<ProcessorStatus>();
+        status.setProcessorStatus(list);
 
 
         // create a processor status with processing time
@@ -137,6 +139,10 @@ public class TestPrometheusReportingTask {
         // create a testable instance of the reporting task
         final PrometheusReportingTask task = new PrometheusReportingTask();
         task.initialize(initContext);
-        task.onTrigger(context);
+        try {
+                task.onTrigger(context);
+        } catch (Exception e) {
+                System.out.println(e.getStackTrace());
+        }
     }
 }
