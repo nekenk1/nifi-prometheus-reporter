@@ -6,11 +6,14 @@ import io.prometheus.client.Gauge;
 import org.apache.nifi.controller.status.ProcessGroupStatus;
 import org.apache.nifi.controller.status.ProcessorStatus;
 import org.apache.nifi.reporting.Bulletin;
+import org.apache.nifi.reporting.prometheus.custom.NifiEnum;
 
 import java.util.HashMap;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Factory class to create {@link CollectorRegistry}s by several metrics.
@@ -122,10 +125,10 @@ public class PrometheusMetricsFactory {
         return NIFI_METRICS_REGISTRY;
     }
 
-    public static HashMap<String, Integer> get_status_of_process_groups(String applicationId, 
+    public static HashMap<NifiEnum, Integer> get_status_of_process_groups(String applicationId, 
                                                                         String processGroupName, 
                                                                         ProcessGroupStatus status,
-                                                                        HashMap<String, Integer> acc){
+                                                                        HashMap<NifiEnum, Integer> acc){
         Integer disabled=0; Integer invalid=0; Integer running=0; Integer stopped=0; Integer validating=0;
         for (ProcessorStatus proc : status.getProcessorStatus()) {
                 switch (proc.getRunStatus()) {
@@ -137,30 +140,38 @@ public class PrometheusMetricsFactory {
                         default: break;
                 }
         }                                                                        
-        acc.put("disabled", acc.get("disabled")+disabled);
-        acc.put("invalid", acc.get("invalid")+invalid);
-        acc.put("running", acc.get("running")+running);
-        acc.put("stopped", acc.get("stopped")+stopped);
-        acc.put("validating", acc.get("validating")+validating);
+        acc.put(NifiEnum.DISABLED, acc.get(NifiEnum.DISABLED)+disabled);
+        acc.put(NifiEnum.INVALID, acc.get(NifiEnum.INVALID)+invalid);
+        acc.put(NifiEnum.RUNNING, acc.get(NifiEnum.RUNNING)+running);
+        acc.put(NifiEnum.STOPPED, acc.get(NifiEnum.STOPPED)+stopped);
+        acc.put(NifiEnum.VALIDATING, acc.get(NifiEnum.VALIDATING)+validating);
 
-        for(ProcessGroupStatus pg : status.getProcessGroupStatus()){
-                get_status_of_process_groups(applicationId, processGroupName, pg, acc);
-        }
+        status.getProcessGroupStatus().forEach(new Consumer<ProcessGroupStatus>() {
+                @Override
+                public void accept(ProcessGroupStatus pg) {
+                        get_status_of_process_groups(applicationId, processGroupName, pg, acc);
+                }
+        });
         return acc;
     }
 
 
     public static void get_status_of_processors(String applicationId, String processGroupName, ProcessGroupStatus status) {
-        HashMap<String, Integer> acc = new HashMap<String, Integer>();
-        acc.put("disabled", 0);acc.put("invalid", 0);acc.put("running", 0);acc.put("stopped", 0);acc.put("validating", 0);
+        HashMap<NifiEnum, Integer> acc = new HashMap<NifiEnum, Integer>();
+        acc.put(NifiEnum.DISABLED, 0);acc.put(NifiEnum.INVALID, 0);acc.put(NifiEnum.RUNNING, 0);acc.put(NifiEnum.STOPPED, 0);acc.put(NifiEnum.VALIDATING, 0);
 
-        get_status_of_process_groups(applicationId, processGroupName, status, acc);
+        status.getProcessGroupStatus().forEach(new Consumer<ProcessGroupStatus>() {
+                @Override
+                public void accept(ProcessGroupStatus pg) {
+                        get_status_of_process_groups(applicationId, pg.getName(), pg, acc);
+                }
+        });
 
-        AMOUNT_PROCESSORS.labels("disabled", applicationId, processGroupName).set(acc.get("disabled"));
-        AMOUNT_PROCESSORS.labels("invalid", applicationId, processGroupName).set(acc.get("invalid"));
-        AMOUNT_PROCESSORS.labels("running", applicationId, processGroupName).set(acc.get("running"));
-        AMOUNT_PROCESSORS.labels("stopped", applicationId, processGroupName).set(acc.get("stopped"));
-        AMOUNT_PROCESSORS.labels("validating", applicationId, processGroupName).set(acc.get("validating"));
+        AMOUNT_PROCESSORS.labels("disabled", applicationId, processGroupName).set(acc.get(NifiEnum.DISABLED));
+        AMOUNT_PROCESSORS.labels("invalid", applicationId, processGroupName).set(acc.get(NifiEnum.INVALID));
+        AMOUNT_PROCESSORS.labels("running", applicationId, processGroupName).set(acc.get(NifiEnum.RUNNING));
+        AMOUNT_PROCESSORS.labels("stopped", applicationId, processGroupName).set(acc.get(NifiEnum.STOPPED));
+        AMOUNT_PROCESSORS.labels("validating", applicationId, processGroupName).set(acc.get(NifiEnum.VALIDATING));
     }
 
     public static CollectorRegistry createJvmMetrics(VirtualMachineMetrics jvmMetrics) {
@@ -206,21 +217,11 @@ public class PrometheusMetricsFactory {
                     JVM_POOL.labels("buff_pool_" + name + "_mem_used").set(stat.getMemoryUsed());
                     JVM_POOL.labels("buff_pool_" + name + "_capacity").set(stat.getTotalCapacity());
                 });
-
         return JVM_REGISTRY;
     }
 
     public static CollectorRegistry createBulletinMetrics(String applicationId, ArrayList<Bulletin> bulletins) {
-        // int warning=0; int error=0; int info=0; int debug=0; int none=0;
         for (Bulletin bull : bulletins) {
-                // switch (bull.getLevel()) {
-                //         case "WARN": warning++; break;
-                //         case "DEBUG": debug++; break;
-                //         case "INFO": info++; break;
-                //         case "ERROR": error++; break;
-                //         case "NONE": none++; break;
-                //         default: break;
-                // }
                 AMOUNT_BULLETINS.labels(
                         bull.getLevel(), 
                         applicationId,
@@ -228,7 +229,6 @@ public class PrometheusMetricsFactory {
                         bull.getSourceType().name(),
                         bull.getGroupName()).set(1);
         }
-
         return BULLETINS_REGISTRY;
     }
 }
