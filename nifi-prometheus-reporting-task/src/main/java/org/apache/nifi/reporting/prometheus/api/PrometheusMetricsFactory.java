@@ -7,6 +7,8 @@ import org.apache.nifi.controller.status.ProcessGroupStatus;
 import org.apache.nifi.controller.status.ProcessorStatus;
 import org.apache.nifi.reporting.Bulletin;
 
+import java.util.HashMap;
+
 import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
@@ -120,7 +122,10 @@ public class PrometheusMetricsFactory {
         return NIFI_METRICS_REGISTRY;
     }
 
-    public static void get_status_of_processors(String applicationId, String processGroupName, ProcessGroupStatus status) {
+    public static HashMap<String, Integer> get_status_of_process_groups(String applicationId, 
+                                                                        String processGroupName, 
+                                                                        ProcessGroupStatus status,
+                                                                        HashMap acc){
         int disabled=0; int invalid=0; int running=0; int stopped=0; int validating=0;
         for (ProcessorStatus proc : status.getProcessorStatus()) {
                 switch (proc.getRunStatus()) {
@@ -131,12 +136,31 @@ public class PrometheusMetricsFactory {
                         case Validating: validating++; break;
                         default: break;
                 }
+        }                                                                        
+        acc.put("disabled", acc.get("disabled")+disabled);
+        acc.put("invalid", acc.get("invalid")+invalid);
+        acc.put("running", acc.get("running")+running);
+        acc.put("stopped", acc.get("stopped")+stopped);
+        acc.put("validating", acc.get("validating")+validating);
+
+        for(ProcessGroupStatus pg : status.getProcessGroupStatus()){
+                get_status_of_process_groups(applicationId, processGroupName, pg, acc);
         }
-        AMOUNT_PROCESSORS.labels("disabled", applicationId, processGroupName).set(disabled);
-        AMOUNT_PROCESSORS.labels("invalid", applicationId, processGroupName).set(invalid);
-        AMOUNT_PROCESSORS.labels("running", applicationId, processGroupName).set(running);
-        AMOUNT_PROCESSORS.labels("stopped", applicationId, processGroupName).set(stopped);
-        AMOUNT_PROCESSORS.labels("validating", applicationId, processGroupName).set(validating);
+        return acc;
+    }
+
+
+    public static void get_status_of_processors(String applicationId, String processGroupName, ProcessGroupStatus status) {
+        HashMap<String, Integer> acc = new HashMap<String, Integer>();
+        acc.put("disabled", 0);acc.put("invalid", 0);acc.put("running", 0);acc.put("stopped", 0);acc.put("validating", 0);
+
+        get_status_of_process_groups(applicationId, processGroupName, status, acc);
+
+        AMOUNT_PROCESSORS.labels("disabled", applicationId, processGroupName).set(acc.get("disabled"));
+        AMOUNT_PROCESSORS.labels("invalid", applicationId, processGroupName).set(acc.get("invalid"));
+        AMOUNT_PROCESSORS.labels("running", applicationId, processGroupName).set(acc.get("running"));
+        AMOUNT_PROCESSORS.labels("stopped", applicationId, processGroupName).set(acc.get("stopped"));
+        AMOUNT_PROCESSORS.labels("validating", applicationId, processGroupName).set(acc.get("validating"));
     }
 
     public static CollectorRegistry createJvmMetrics(VirtualMachineMetrics jvmMetrics) {
