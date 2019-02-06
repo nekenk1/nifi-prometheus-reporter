@@ -125,8 +125,8 @@ public class PrometheusMetricsFactory {
     public static HashMap<String, Integer> get_status_of_process_groups(String applicationId, 
                                                                         String processGroupName, 
                                                                         ProcessGroupStatus status,
-                                                                        HashMap acc){
-        int disabled=0; int invalid=0; int running=0; int stopped=0; int validating=0;
+                                                                        HashMap<String, Integer> acc){
+        Integer disabled=0; Integer invalid=0; Integer running=0; Integer stopped=0; Integer validating=0;
         for (ProcessorStatus proc : status.getProcessorStatus()) {
                 switch (proc.getRunStatus()) {
                         case Disabled: disabled++; break;
