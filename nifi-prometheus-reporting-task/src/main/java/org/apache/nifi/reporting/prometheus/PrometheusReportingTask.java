@@ -17,12 +17,8 @@
 package org.apache.nifi.reporting.prometheus;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 import com.yammer.metrics.core.VirtualMachineMetrics;
@@ -88,6 +84,15 @@ public class PrometheusReportingTask extends AbstractReportingTask {
                     .createListValidator(true, true
                             , StandardValidators.createRegexMatchingValidator(Pattern.compile("[0-9a-zA-Z-_]+"))))
             .build();
+
+    static final PropertyDescriptor INCLUDE_SUB_GROUPS = new PropertyDescriptor.Builder()
+            .name("Include sub process groups")
+            .description("If true then send sub processor groups metrics in addition to the processor group metrics")
+            .allowableValues("true", "false")
+            .defaultValue("false")
+            .required(true)
+            .build();
+
     static final PropertyDescriptor JOB_NAME = new PropertyDescriptor.Builder()
             .name("The job name")
             .description("The name of the exporting job")
@@ -132,6 +137,7 @@ public class PrometheusReportingTask extends AbstractReportingTask {
         properties.add(APPLICATION_ID);
         properties.add(INSTANCE_ID);
         properties.add(PROCESS_GROUP_IDS);
+        properties.add(INCLUDE_SUB_GROUPS);
         properties.add(JOB_NAME);
         properties.add(SEND_JVM_METRICS);
         properties.add(USE_AUTHENTICATION);
@@ -167,7 +173,8 @@ public class PrometheusReportingTask extends AbstractReportingTask {
             getLogger().error("Failed pushing JVM-metrics to Prometheus PushGateway due to {}; routing to failure", e);
         }
 
-        for (ProcessGroupStatus status : searchProcessGroups(context, context.getProperty(PROCESS_GROUP_IDS))) {
+
+        for (ProcessGroupStatus status : searchProcessGroupsB(context, context.getProperty(PROCESS_GROUP_IDS))) {
             try {
                 pushGateway.pushAdd(PrometheusMetricsFactory.createNifiMetrics(status, applicationId), jobName, groupingKey);
             } catch (IOException e) {
@@ -187,6 +194,43 @@ public class PrometheusReportingTask extends AbstractReportingTask {
         }
     }
 
+    private ProcessGroupStatus[] searchProcessGroupsB(final ReportingContext context, PropertyValue value) {
+        Collection<ProcessGroupStatus> groups = Arrays.asList(searchProcessGroups(context,value));
+        HashSet<ProcessGroupStatus> ret = new HashSet<ProcessGroupStatus>();
+
+        if(context.getProperty(INCLUDE_SUB_GROUPS).asBoolean())
+        {
+            groups.forEach(new Consumer<ProcessGroupStatus>() {
+                @Override
+                public void accept(ProcessGroupStatus pgs) {
+                    addSubGroups(pgs,ret);
+                }
+            });
+        }
+        else
+        {
+            ret.addAll(groups);
+        }
+
+        return ret.toArray(new ProcessGroupStatus[ret.size()]);
+    }
+
+    private void addSubGroups(ProcessGroupStatus processGroupStatus, HashSet<ProcessGroupStatus> ret)
+    {
+        if(ret.contains(processGroupStatus))
+        {
+            return;
+        }
+        ret.add(processGroupStatus);
+
+        processGroupStatus.getProcessGroupStatus().forEach(new Consumer<ProcessGroupStatus>() {
+            @Override
+            public void accept(ProcessGroupStatus pgs) {
+                addSubGroups(pgs,ret);
+            }
+        });
+    }
+
     /**
      * Searches all ProcessGroups defined in a PropertyValue as a comma-separated list of ProcessorGroup-IDs.
      * Therefore blanks are trimmed and new-line characters are removed! Processors that can not be found are ignored.
@@ -197,6 +241,8 @@ public class PrometheusReportingTask extends AbstractReportingTask {
     private ProcessGroupStatus[] searchProcessGroups(final ReportingContext context, PropertyValue value) {
         if (value.isSet()) {
             String content = value.evaluateAttributeExpressions().getValue();
+
+
 
             ProcessGroupStatus[] groups = Arrays
                     .stream(content.replace("\n", "").split(","))

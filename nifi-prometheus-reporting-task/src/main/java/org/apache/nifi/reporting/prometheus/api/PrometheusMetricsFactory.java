@@ -12,6 +12,7 @@ import java.util.HashMap;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -99,6 +100,8 @@ public class PrometheusMetricsFactory {
             .register(JVM_REGISTRY);
 
     public static CollectorRegistry createNifiMetrics(ProcessGroupStatus status, String applicationId) {
+
+
         String processGroupName = status.getName();
         AMOUNT_FLOWFILES_TOTAL.labels("sent", applicationId, processGroupName).set(status.getFlowFilesSent());
         AMOUNT_FLOWFILES_TOTAL.labels("transferred", applicationId, processGroupName).set(status.getFlowFilesTransferred());
@@ -160,12 +163,7 @@ public class PrometheusMetricsFactory {
         HashMap<NifiEnum, Integer> acc = new HashMap<NifiEnum, Integer>();
         acc.put(NifiEnum.DISABLED, 0);acc.put(NifiEnum.INVALID, 0);acc.put(NifiEnum.RUNNING, 0);acc.put(NifiEnum.STOPPED, 0);acc.put(NifiEnum.VALIDATING, 0);
 
-        status.getProcessGroupStatus().forEach(new Consumer<ProcessGroupStatus>() {
-                @Override
-                public void accept(ProcessGroupStatus pg) {
-                        get_status_of_process_groups(applicationId, pg.getName(), pg, acc);
-                }
-        });
+        get_status_of_process_groups(applicationId, status.getName(), status, acc);
 
         AMOUNT_PROCESSORS.labels("disabled", applicationId, processGroupName).set(acc.get(NifiEnum.DISABLED));
         AMOUNT_PROCESSORS.labels("invalid", applicationId, processGroupName).set(acc.get(NifiEnum.INVALID));
